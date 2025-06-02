@@ -58,7 +58,7 @@ FROM customer
 
 SELECT LOWER(CONCAT (last_name, ' ', first_name)) AS "Полное имя покупателя", active as "Активность"
 FROM customer
-WHERE first_name = 'KELLY' OR first_name = 'WILLIE' AND active = '1'
+WHERE first_name IN ('KELLY', 'WILLIE') AND active = '1'
 
 
 
