@@ -90,7 +90,7 @@ WHERE c.city != c2.city
 --дате возврата (поле return_date), вычислите для каждого покупателя среднее количество 
 --дней, за которые он возвращает фильмы. В результате должны быть дробные значения, а не интервал.
  
-SELECT customer_id AS "ID покупателя", ROUND(AVG(return_date::date - rental_date::date), 2)
+SELECT customer_id AS "ID покупателя", ROUND(AVG(return_date::date - rental_date::date), 2) AS "Ср. кол-во дней на возврат"
 FROM rental r 
 GROUP BY customer_id
 ORDER BY customer_id 
