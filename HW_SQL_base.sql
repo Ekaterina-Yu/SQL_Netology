@@ -44,7 +44,7 @@ LEFT JOIN store s ON c.store_id = s.store_id
 LEFT JOIN address a ON s.address_id = a.address_id 
 LEFT JOIN city c2 ON a.city_id = c2.city_id 
 LEFT JOIN staff s2 ON s.manager_staff_id = s2.staff_id 
-GROUP BY c.store_id, manager_staff_id, s2.last_name, s2.first_name, c2.city
+GROUP BY c.store_id, c2.city_id, s2.staff_id 
 HAVING COUNT(customer_id) > 300
 
 
@@ -61,7 +61,6 @@ ORDER BY COUNT(r.rental_id) DESC
 LIMIT 5
 
 
-
 --ЗАДАНИЕ №4
 --Посчитайте для каждого покупателя 4 аналитических показателя:
 --  1. количество фильмов, которые он взял в аренду
@@ -69,10 +68,12 @@ LIMIT 5
 --  3. минимальное значение платежа за аренду фильма
 --  4. максимальное значение платежа за аренду фильма
 
-SELECT CONCAT(last_name, ' ', first_name) AS "Полное имя покупателя", COUNT(p.rental_id) AS "Количество фильмов", 
+SELECT CONCAT(last_name, ' ', first_name) AS "Полное имя покупателя", COUNT(i.film_id) AS "Количество фильмов", 
 	ROUND(SUM(p.amount)) AS "Сумма платежей", MIN(p.amount) AS "Минимальный платёж", MAX(p.amount) AS "Максимальный платёж"
 FROM customer c 
 LEFT JOIN payment p ON c.customer_id = p.customer_id 
+LEFT JOIN rental r ON p.rental_id = r.rental_id 
+LEFT JOIN inventory i ON r.inventory_id = i.inventory_id 
 GROUP BY c.customer_id
 
 
