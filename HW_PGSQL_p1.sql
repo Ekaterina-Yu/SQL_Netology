@@ -57,6 +57,7 @@ JOIN customer c ON p.customer_id  = c.customer_id
 --ЗАДАНИЕ №3
 --С помощью оконной функции определите, на сколько каждый следующий платеж покупателя больше или меньше текущего.
 
+
 SELECT CONCAT(first_name, ' ',last_name) AS "Полное имя покупателя", p.payment_date::date AS "Дата платежа", p.amount AS "Сумма текущ. платежа",
 	LEAD(amount, 1, 0.0) OVER (PARTITION BY p.customer_id ORDER BY p.payment_date) AS "Сумма след. платежа", 
 	LEAD(amount, 1, 0.0) OVER (PARTITION BY p.customer_id ORDER BY p.payment_date) - p.amount AS "Разница текущ. и след. платежа" 
