@@ -1,3 +1,7 @@
+-- Испр. 2, 5, 7, 8, 9, 10
+
+
+
 --1. Получите количество проектов, подписанных в 2023 году.
 --В результат вывести одно значение количества.
 
@@ -12,9 +16,13 @@ WHERE sign_date::date BETWEEN '01.01.2023' AND '31.12.2023'
 -- Результат вывести одним значением в виде "... years ... month ... days"
 -- Использование более 2х функций для работы с типом данных дата и время будет являться ошибкой.
 
+
 SELECT SUM(AGE (current_date, birthdate)) AS "Суммарный возраст"
 FROM person p 
+LEFT JOIN employee e ON p.person_id = e.person_id 
+WHERE hire_date::date BETWEEN '01.01.2022' AND '31.12.2022'
 
+ 
 
 -- 3. Получите сотрудников, у которого фамилия начинается на М, всего в фамилии 8 букв и который работает дольше других.
 -- Если таких сотрудников несколько, выведите одного случайного.
@@ -52,7 +60,8 @@ LEFT JOIN customer c ON p.customer_id = c.customer_id
 LEFT JOIN address a ON c.address_id = a.address_id 
 LEFT JOIN city c2 ON a.city_id = c2.city_id 
 LEFT JOIN country c3 ON c2.country_id = c3.country_id 
-WHERE c2.city_name = 'Жуковский' AND c3.country_name = 'Россия'
+WHERE c2.city_name = 'Жуковский' AND c3.country_name = 'Россия' AND fact_transaction_timestamp IS NOT NULL 
+
 
 -- 6. Пусть руководитель проекта получает премию в 1% от стоимости завершенных проектов.
 -- Если взять завершенные проекты, какой руководитель проекта получит самый большой бонус?
@@ -84,14 +93,15 @@ HAVING MAX(total) >= (SELECT MAX(total) FROM cte_sum)
 -- 2022-06-24	46248120.30
 -- В результат должна попасть дата 2022-06-23
 
+
 SELECT * 
 FROM (
 	SELECT payment_type AS "Тип платежа", plan_payment_date AS "Плановая дата платежа", 
 		SUM(amount) OVER(PARTITION BY date_trunc('month', plan_payment_date) ORDER BY plan_payment_date) AS "Накопление"
 	FROM project_payment pp 
-	WHERE payment_type::varchar = 'Авансовый')
+	WHERE payment_type = 'Авансовый')
 WHERE "Накопление" > 30000000
-LIMIT 1
+
 
 
 -- 8. Используя рекурсию посчитайте сумму фактических окладов сотрудников из структурного подразделения с id равным 17 и всех дочерних подразделений.
@@ -123,18 +133,20 @@ LEFT JOIN employee_position ep ON p.position_id = ep.position_id
 
 
 
-SELECT amount, avtotal, sumtotal, number, payment_date
-FROM
-(SELECT *, SUM(average_value) OVER (PARTITION BY date_trunc('year', fact_transaction_timestamp)) AS avtotal, 
-	SUM(amount) OVER (PARTITION BY date_trunc('year', fact_transaction_timestamp)) AS sumtotal
+SELECT date_part('year', payment_date) AS "Год", sumtotal  AS "Сумма платежей"
 FROM (
-SELECT *, AVG(amount) OVER (ORDER BY "payment_date" ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) as "average_value"
-FROM (
-	SELECT *, fact_transaction_timestamp::date AS "payment_date", 
-		ROW_NUMBER() OVER (PARTITION BY date_trunc('year', fact_transaction_timestamp) ORDER BY fact_transaction_timestamp) AS "number"
-	FROM project_payment pp) 
-WHERE number % 5 = 0))
-WHERE sumtotal < avtotal 
+	SELECT *, SUM(average_value) OVER (ORDER BY payment_date) AS avtotal
+	FROM(
+		SELECT *, AVG(amount) OVER (ORDER BY "payment_date" ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) as "average_value", 
+			SUM(amount) OVER (PARTITION BY date_trunc('year', payment_date)) AS sumtotal
+		FROM(
+			SELECT project_payment_id, amount, fact_transaction_timestamp::date AS "payment_date", 
+				ROW_NUMBER() OVER (PARTITION BY date_trunc('year', fact_transaction_timestamp) ORDER BY fact_transaction_timestamp) AS "number"
+			FROM project_payment pp
+			WHERE fact_transaction_timestamp IS NOT NULL)) 
+	WHERE number % 5 = 0)
+WHERE sumtotal < avtotal
+GROUP BY date_part('year', payment_date), sumtotal
 
 -- 10. Создайте материализованное представление, которое будет хранить отчет следующей структуры:
 -- идентификатор проекта
@@ -148,11 +160,8 @@ WHERE sumtotal < avtotal
 
 CREATE MATERIALIZED VIEW Last_payment_report AS
 SELECT p.project_id AS "Идентификатор проекта", p.project_name AS "Название проекта", MAX(pp.fact_transaction_timestamp) AS "Дата последней оплаты", p2.full_fio AS "ФИО руководителя",
-    c.customer_name AS "Название контрагента", STRING_AGG(DISTINCT tow.type_of_work_name, ', ') AS "Типы работ", 
-        (SELECT amount 
-        FROM project_payment 
-        WHERE project_id = p.project_id 
-        AND fact_transaction_timestamp = MAX(pp.fact_transaction_timestamp)) AS "Сумма последней оплаты"
+    c.customer_name AS "Название контрагента", STRING_AGG(DISTINCT tow.type_of_work_name, ', ') AS "Типы работ",
+    	MAX(pp.fact_transaction_timestamp) AS "Сумма последней оплаты"
 FROM project_payment pp 
 LEFT JOIN project p ON pp.project_id = p.project_id 
 LEFT JOIN employee e ON p.project_manager_id = e.employee_id 
@@ -162,5 +171,4 @@ LEFT JOIN customer_type_of_work ctow ON c.customer_id = ctow.customer_id
 LEFT JOIN type_of_work tow ON ctow.type_of_work_id = tow.type_of_work_id 
 GROUP BY p.project_id, p2.person_id, c.customer_id
 ORDER BY p.project_id
-
 
