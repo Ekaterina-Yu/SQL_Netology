@@ -111,12 +111,12 @@ WHERE "Накопление" > 30000000
 WITH RECURSIVE sal AS (
 	SELECT *, 1 as level
 	FROM company_structure
-	WHERE parent_id = 17
+	WHERE unit_id = 17
 	UNION
 	SELECT cs.*, level + 1 as level
 	FROM sal
 	JOIN company_structure cs on cs.parent_id = sal.unit_id)
-SELECT SUM(salary) AS "Сумма"
+SELECT SUM(salary * rate) AS "Сумма"
 FROM sal
 LEFT JOIN position p ON sal.unit_id = p.unit_id 
 LEFT JOIN employee_position ep ON p.position_id = ep.position_id
