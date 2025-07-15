@@ -94,12 +94,12 @@ HAVING MAX(total) >= (SELECT MAX(total) FROM cte_sum)
 -- В результат должна попасть дата 2022-06-23
 
 
-SELECT * 
+SELECT DISTINCT ON ("Месяц") "Плановая дата платежа", "Накопление"
 FROM (
-	SELECT payment_type AS "Тип платежа", plan_payment_date AS "Плановая дата платежа", 
-		SUM(amount) OVER(PARTITION BY date_trunc('month', plan_payment_date) ORDER BY plan_payment_date) AS "Накопление"
-	FROM project_payment pp 
-	WHERE payment_type = 'Авансовый')
+    SELECT date_trunc('month', plan_payment_date) AS "Месяц", plan_payment_date AS "Плановая дата платежа", payment_type AS "Тип платежа",
+    	SUM(amount) OVER(PARTITION BY date_trunc('month', plan_payment_date) ORDER BY plan_payment_date) AS "Накопление"
+    FROM project_payment pp
+    WHERE payment_type = 'Авансовый')
 WHERE "Накопление" > 30000000
 
 
