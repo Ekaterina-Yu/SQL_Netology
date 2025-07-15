@@ -131,22 +131,17 @@ LEFT JOIN employee_position ep ON p.position_id = ep.position_id
 -- Получите сумму стоимости проектов на каждый год.
 -- Выведите в результат значение года (годов) и сумму проектов, где сумма проектов меньше, чем сумма скользящих средних значений.
 
-
-
-SELECT date_part('year', payment_date) AS "Год", sumtotal  AS "Сумма платежей"
-FROM (
-	SELECT *, SUM(average_value) OVER (ORDER BY payment_date) AS avtotal
+SELECT date_trunc('year', fact_transaction_timestamp) AS "Год", SUM(amount) AS "Сумма"
 	FROM(
-		SELECT *, AVG(amount) OVER (ORDER BY "payment_date" ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) as "average_value", 
-			SUM(amount) OVER (PARTITION BY date_trunc('year', payment_date)) AS sumtotal
-		FROM(
-			SELECT project_payment_id, amount, fact_transaction_timestamp::date AS "payment_date", 
-				ROW_NUMBER() OVER (PARTITION BY date_trunc('year', fact_transaction_timestamp) ORDER BY fact_transaction_timestamp) AS "number"
-			FROM project_payment pp
-			WHERE fact_transaction_timestamp IS NOT NULL)) 
-	WHERE number % 5 = 0)
-WHERE sumtotal < avtotal
-GROUP BY date_part('year', payment_date), sumtotal
+		SELECT *, AVG(amount) OVER (ORDER BY fact_transaction_timestamp ROWS BETWEEN 2 PRECEDING AND 2 FOLLOWING) as "average_value"
+		FROM (
+			SELECT *, ROW_NUMBER() OVER (ORDER BY fact_transaction_timestamp) AS number
+				FROM project_payment pp
+				WHERE fact_transaction_timestamp IS NOT NULL)
+		WHERE number % 5 = 0)
+GROUP BY date_trunc('year', fact_transaction_timestamp)
+HAVING SUM(amount) < SUM(average_value)
+
 
 -- 10. Создайте материализованное представление, которое будет хранить отчет следующей структуры:
 -- идентификатор проекта
@@ -159,16 +154,19 @@ GROUP BY date_part('year', payment_date), sumtotal
 
 
 CREATE MATERIALIZED VIEW Last_payment_report AS
-SELECT p.project_id AS "Идентификатор проекта", p.project_name AS "Название проекта", MAX(pp.fact_transaction_timestamp) AS "Дата последней оплаты", p2.full_fio AS "ФИО руководителя",
-    c.customer_name AS "Название контрагента", STRING_AGG(DISTINCT tow.type_of_work_name, ', ') AS "Типы работ",
-    	MAX(pp.fact_transaction_timestamp) AS "Сумма последней оплаты"
-FROM project_payment pp 
-LEFT JOIN project p ON pp.project_id = p.project_id 
+SELECT p.project_id AS "Идентификатор проекта", project_name AS "Название проекта", fact_transaction_timestamp AS "Дата последней оплаты", amount AS "Сумма последней оплаты",  
+	full_fio AS "ФИО руководителя", customer_name AS "Название контрагента", STRING_AGG(DISTINCT tow.type_of_work_name, ', ') AS "Типы работ"
+FROM (
+	SELECT project_id, fact_transaction_timestamp, amount
+	FROM project_payment pp
+	WHERE fact_transaction_timestamp = (SELECT MAX(fact_transaction_timestamp)
+    	FROM project_payment pp2
+    	WHERE pp.project_id = pp2.project_id
+     		AND fact_transaction_timestamp IS NOT NULL)) pp3
+LEFT JOIN project p ON pp3.project_id = p.project_id 
 LEFT JOIN employee e ON p.project_manager_id = e.employee_id 
 LEFT JOIN person p2 ON e.person_id = p2.person_id 
 LEFT JOIN customer c ON p.customer_id = c.customer_id 
 LEFT JOIN customer_type_of_work ctow ON c.customer_id = ctow.customer_id 
-LEFT JOIN type_of_work tow ON ctow.type_of_work_id = tow.type_of_work_id 
-GROUP BY p.project_id, p2.person_id, c.customer_id
-ORDER BY p.project_id
-
+LEFT JOIN type_of_work tow ON ctow.type_of_work_id = tow.type_of_work_id
+GROUP BY p.project_id, pp3.fact_transaction_timestamp, pp3.amount, p2.full_fio, c.customer_name
